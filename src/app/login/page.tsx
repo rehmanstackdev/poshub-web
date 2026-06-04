@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { toast } from "sonner";
 import { ScanLine } from "lucide-react";
 
@@ -41,8 +42,18 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-1 items-center justify-center p-6">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,oklch(0.4_0.16_310/.3),transparent_60%),radial-gradient(ellipse_at_bottom,oklch(0.5_0.18_200/.25),transparent_60%)]" />
+    <div className="relative flex min-h-screen flex-1 items-center justify-center p-6">
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 opacity-70 dark:opacity-100"
+        style={{
+          background:
+            "radial-gradient(ellipse at top, oklch(0.45 0.20 260 / 0.20), transparent 60%), radial-gradient(ellipse at bottom, oklch(0.55 0.18 235 / 0.18), transparent 60%)",
+        }}
+      />
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-md border-border/60 bg-card/80 backdrop-blur">
         <CardHeader className="space-y-1">
           <div className="flex items-center gap-2 text-primary">

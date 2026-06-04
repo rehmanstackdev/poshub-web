@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   useGetDailyReportQuery,
   useGetMonthlyReportQuery,
@@ -8,21 +9,14 @@ import {
   useGetTopProductsQuery,
   useGetWeeklyReportQuery,
 } from "@/store/api";
-import type { SalesSummary } from "@/lib/types";
+import type { SalesSummary, TopProduct } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DataTable } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { StatCardSkeleton, TableRowSkeleton } from "@/components/skeletons";
+import { StatCardSkeleton } from "@/components/skeletons";
 
 type Range = "daily" | "weekly" | "monthly" | "custom";
 
@@ -76,10 +70,35 @@ export default function ReportsPage() {
       ? {
           from: new Date(summary.from).toISOString(),
           to: new Date(summary.to).toISOString(),
-          limit: 10,
+          limit: 100,
         }
-      : { from: "", to: "", limit: 10 },
+      : { from: "", to: "", limit: 100 },
     { skip: !summary },
+  );
+
+  const topColumns = useMemo<ColumnDef<TopProduct>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Product",
+      },
+      {
+        accessorKey: "quantity",
+        header: "Quantity",
+        cell: ({ row }) => (
+          <span className="text-right block">{row.original.quantity}</span>
+        ),
+      },
+      {
+        id: "revenue",
+        header: "Revenue",
+        accessorFn: (row) => Number(row.revenue),
+        cell: ({ row }) => (
+          <span className="text-right block">${row.original.revenue}</span>
+        ),
+      },
+    ],
+    [],
   );
 
   return (
@@ -156,41 +175,17 @@ export default function ReportsPage() {
         )}
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Top products</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {topQ.isLoading || topQ.isFetching ? (
-                <TableRowSkeleton columns={3} rows={4} />
-              ) : !topQ.data || topQ.data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-muted-foreground">
-                    No sales in this range.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                topQ.data.map((p) => (
-                  <TableRow key={p.productId}>
-                    <TableCell>{p.name}</TableCell>
-                    <TableCell className="text-right">{p.quantity}</TableCell>
-                    <TableCell className="text-right">${p.revenue}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <div className="mt-6">
+        <h2 className="mb-3 text-lg font-semibold">Top products</h2>
+        <DataTable
+          columns={topColumns}
+          data={topQ.data ?? []}
+          isLoading={topQ.isLoading || topQ.isFetching}
+          searchPlaceholder="Search products..."
+          emptyMessage="No sales in this range."
+          initialPageSize={10}
+        />
+      </div>
     </div>
   );
 }

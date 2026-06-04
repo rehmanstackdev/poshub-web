@@ -2,15 +2,29 @@ export type Role = "super_admin" | "admin" | "staff";
 export type UserStatus = "active" | "disabled";
 export type PaymentMethod = "cash" | "card" | "mobile";
 
+export interface Shop {
+  id: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  logoUrl: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuthUser {
   id: string;
   name: string;
   email: string;
   role: Role;
+  shopId: string | null;
 }
 
 export interface User extends AuthUser {
   status: UserStatus;
+  shopId: string | null;
+  shop?: Shop | null;
   createdAt: string;
   updatedAt: string;
 }

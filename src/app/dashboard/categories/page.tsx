@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   useCreateCategoryMutation,
   useDeleteCategoryMutation,
@@ -21,17 +22,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DataTable } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { TableRowSkeleton } from "@/components/skeletons";
 import { toast } from "sonner";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 
@@ -67,7 +60,6 @@ export default function CategoriesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Delete this category?")) return;
     try {
       await deleteCategory(id).unwrap();
       toast.success("Category deleted");
@@ -75,6 +67,78 @@ export default function CategoriesPage() {
       toast.error(getErrorMessage(err, "Delete failed"));
     }
   }
+
+  const columns = useMemo<ColumnDef<Category>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.name}</span>
+        ),
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.description || "—"}
+          </span>
+        ),
+        enableSorting: false,
+      },
+      {
+        accessorKey: "createdAt",
+        header: "Created",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {new Date(row.original.createdAt).toLocaleDateString()}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        size: 120,
+        cell: ({ row }) => {
+          const c = row.original;
+          return (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setEditing(c);
+                  setOpen(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <ConfirmDialog
+                trigger={
+                  <Button variant="ghost" size="icon" title="Delete category">
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                }
+                title="Delete category"
+                description={
+                  <>
+                    This will permanently delete{" "}
+                    <span className="font-medium text-foreground">{c.name}</span>
+                    . Products in this category may also be affected.
+                  </>
+                }
+                confirmLabel="Delete"
+                onConfirm={() => handleDelete(c.id)}
+              />
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
 
   return (
     <div>
@@ -103,60 +167,13 @@ export default function CategoriesPage() {
         }
       />
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRowSkeleton columns={4} />
-            ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="text-muted-foreground">
-                  No categories yet.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {c.description || "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(c.createdAt).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setEditing(c);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(c.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={items}
+        isLoading={isLoading}
+        searchPlaceholder="Search categories..."
+        emptyMessage="No categories yet."
+      />
     </div>
   );
 }

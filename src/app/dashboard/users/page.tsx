@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   useCreateUserMutation,
-  useDisableUserMutation,
+  useDeleteUserMutation,
+  useGetShopsQuery,
   useGetUsersQuery,
   useUpdateUserMutation,
 } from "@/store/api";
 import { useAppSelector } from "@/store/hooks";
-import type { Role, User } from "@/lib/types";
+import type { Role, Shop, User } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,25 +31,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DataTable } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { TableRowSkeleton } from "@/components/skeletons";
 import { toast } from "sonner";
-import { Pencil, Plus, UserX } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 interface UserFormState {
   name: string;
   email: string;
   password: string;
   role: Role;
+  shopId: string;
 }
 
 function getErrorMessage(err: unknown, fallback: string) {
@@ -58,38 +53,41 @@ function getErrorMessage(err: unknown, fallback: string) {
 
 export default function UsersPage() {
   const me = useAppSelector((s) => s.auth.user);
+  const canManage = me?.role === "super_admin" || me?.role === "admin";
   const { data: items = [], isLoading } = useGetUsersQuery(undefined, {
+    skip: !canManage,
+  });
+  const { data: shops = [] } = useGetShopsQuery(undefined, {
     skip: me?.role !== "super_admin",
   });
   const [createUser] = useCreateUserMutation();
   const [updateUser] = useUpdateUserMutation();
-  const [disableUserMutate] = useDisableUserMutation();
+  const [deleteUserMutate] = useDeleteUserMutation();
 
   const [editing, setEditing] = useState<User | null>(null);
   const [open, setOpen] = useState(false);
 
-  if (me?.role !== "super_admin") {
-    return (
-      <p className="text-muted-foreground">
-        Only Super Admins can manage users.
-      </p>
-    );
-  }
-
   async function handleSave(form: UserFormState) {
     try {
       if (editing) {
-        const payload: Partial<UserFormState> & { id: string } = {
+        const payload: Record<string, unknown> & { id: string } = {
           id: editing.id,
           name: form.name,
           email: form.email,
           role: form.role,
+          shopId: form.shopId || null,
         };
         if (form.password) payload.password = form.password;
-        await updateUser(payload).unwrap();
+        await updateUser(payload as Parameters<typeof updateUser>[0]).unwrap();
         toast.success("User updated");
       } else {
-        await createUser(form).unwrap();
+        await createUser({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+          shopId: form.shopId || undefined,
+        } as Parameters<typeof createUser>[0]).unwrap();
         toast.success("User created");
       }
       setOpen(false);
@@ -99,14 +97,126 @@ export default function UsersPage() {
     }
   }
 
-  async function disable(id: string) {
-    if (!confirm("Disable this user?")) return;
+  async function deleteUser(id: string) {
     try {
-      await disableUserMutate(id).unwrap();
-      toast.success("User disabled");
+      await deleteUserMutate(id).unwrap();
+      toast.success("User deleted");
     } catch (err) {
-      toast.error(getErrorMessage(err, "Disable failed"));
+      toast.error(getErrorMessage(err, "Delete failed"));
     }
+  }
+
+  const columns = useMemo<ColumnDef<User>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.name}</span>
+        ),
+      },
+      {
+        accessorKey: "email",
+        header: "Email",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">{row.original.email}</span>
+        ),
+      },
+      {
+        accessorKey: "role",
+        header: "Role",
+        cell: ({ row }) => (
+          <Badge
+            variant="secondary"
+            className="bg-primary/15 text-primary capitalize"
+          >
+            {row.original.role.replace("_", " ")}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "shopId",
+        header: "Shop",
+        cell: ({ row }) => {
+          const shopName = shops.find((s) => s.id === row.original.shopId)?.name;
+          return (
+            <span className="text-muted-foreground text-sm">
+              {shopName ?? (row.original.role === "super_admin" ? "All shops" : "—")}
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <Badge
+              variant={u.status === "active" ? "secondary" : "destructive"}
+              className={
+                u.status === "active" ? "bg-chart-3/20 text-chart-3" : ""
+              }
+            >
+              {u.status}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        size: 120,
+        cell: ({ row }) => {
+          const u = row.original;
+          return (
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setEditing(u);
+                  setOpen(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              {u.id !== me?.id && (
+                <ConfirmDialog
+                  trigger={
+                    <Button variant="ghost" size="icon" title="Delete user">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  }
+                  title="Delete user"
+                  description={
+                    <>
+                      Permanently delete{" "}
+                      <span className="font-medium text-foreground">
+                        {u.name}
+                      </span>
+                      ? This cannot be undone.
+                    </>
+                  }
+                  confirmLabel="Delete"
+                  onConfirm={() => deleteUser(u.id)}
+                />
+              )}
+            </div>
+          );
+        },
+      },
+    ],
+    [me?.id],
+  );
+
+  if (!canManage) {
+    return (
+      <p className="text-muted-foreground">
+        Only Admins and Super Admins can manage users.
+      </p>
+    );
   }
 
   return (
@@ -130,93 +240,37 @@ export default function UsersPage() {
             <UserForm
               key={editing?.id ?? "new"}
               initial={editing}
+              shops={shops}
+              currentUserShopId={me?.shopId ?? null}
+              isSuperAdmin={me?.role === "super_admin"}
               onSubmit={handleSave}
             />
           </Dialog>
         }
       />
 
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRowSkeleton columns={5} />
-            ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-muted-foreground">
-                  No users yet.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {u.email}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className="bg-primary/15 text-primary capitalize"
-                    >
-                      {u.role.replace("_", " ")}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={u.status === "active" ? "secondary" : "destructive"}
-                      className={
-                        u.status === "active" ? "bg-chart-3/20 text-chart-3" : ""
-                      }
-                    >
-                      {u.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setEditing(u);
-                        setOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    {u.status === "active" && u.id !== me?.id && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => disable(u.id)}
-                      >
-                        <UserX className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={items}
+        isLoading={isLoading}
+        searchPlaceholder="Search by name, email..."
+        emptyMessage="No users yet."
+      />
     </div>
   );
 }
 
 function UserForm({
   initial,
+  shops,
+  currentUserShopId,
+  isSuperAdmin,
   onSubmit,
 }: {
   initial: User | null;
+  shops: Shop[];
+  currentUserShopId: string | null;
+  isSuperAdmin: boolean;
   onSubmit: (data: UserFormState) => void;
 }) {
   const [form, setForm] = useState<UserFormState>({
@@ -224,6 +278,7 @@ function UserForm({
     email: initial?.email ?? "",
     password: "",
     role: initial?.role ?? "staff",
+    shopId: initial?.shopId ?? currentUserShopId ?? "",
   });
 
   function update<K extends keyof UserFormState>(
@@ -288,16 +343,38 @@ function UserForm({
             value={form.role}
             onValueChange={(v) => update("role", v as Role)}
           >
-            <SelectTrigger id="u-role">
+            <SelectTrigger id="u-role" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="super_admin">Super Admin</SelectItem>
+              {isSuperAdmin && (
+                <SelectItem value="super_admin">Super Admin</SelectItem>
+              )}
               <SelectItem value="admin">Admin</SelectItem>
               <SelectItem value="staff">Staff</SelectItem>
             </SelectContent>
           </Select>
         </div>
+        {isSuperAdmin && form.role !== "super_admin" && (
+          <div className="space-y-2">
+            <Label htmlFor="u-shop">Assign to Shop</Label>
+            <Select
+              value={form.shopId}
+              onValueChange={(v) => update("shopId", v)}
+            >
+              <SelectTrigger id="u-shop" className="w-full">
+                <SelectValue placeholder="Select shop…" />
+              </SelectTrigger>
+              <SelectContent>
+                {shops.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="outline">

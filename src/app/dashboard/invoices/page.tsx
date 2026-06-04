@@ -1,19 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { useGetInvoicesQuery } from "@/store/api";
 import { downloadInvoicePdf } from "@/lib/api";
+import type { Invoice } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/data-table";
 import { PageHeader } from "@/components/page-header";
-import { TableRowSkeleton } from "@/components/skeletons";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 
@@ -28,61 +22,82 @@ export default function InvoicesPage() {
     }
   }
 
+  const columns = useMemo<ColumnDef<Invoice>[]>(
+    () => [
+      {
+        accessorKey: "invoiceNo",
+        header: "Invoice #",
+        cell: ({ row }) => (
+          <span className="font-mono text-xs">{row.original.invoiceNo}</span>
+        ),
+      },
+      {
+        accessorKey: "issuedAt",
+        header: "Date",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {new Date(row.original.issuedAt).toLocaleString()}
+          </span>
+        ),
+      },
+      {
+        id: "customer",
+        header: "Customer",
+        accessorFn: (row) => row.sale?.customerName ?? "Walk-in",
+        cell: ({ row }) => row.original.sale?.customerName || "Walk-in",
+      },
+      {
+        id: "payment",
+        header: "Payment",
+        accessorFn: (row) => row.sale?.paymentMethod ?? "",
+        cell: ({ row }) => (
+          <span className="capitalize">{row.original.sale?.paymentMethod}</span>
+        ),
+      },
+      {
+        id: "total",
+        header: "Total",
+        accessorFn: (row) => Number(row.sale?.total ?? 0),
+        cell: ({ row }) => (
+          <span className="font-medium">
+            ${row.original.sale?.total ?? "—"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <span className="sr-only">Actions</span>,
+        enableSorting: false,
+        size: 100,
+        cell: ({ row }) => (
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                downloadPdf(row.original.id, row.original.invoiceNo)
+              }
+              title="Download PDF"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <div>
       <PageHeader title="Invoices" description="All issued receipts." />
-      <Card>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Invoice #</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Payment</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="w-32 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRowSkeleton columns={6} />
-            ) : items.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
-                  No invoices yet.
-                </TableCell>
-              </TableRow>
-            ) : (
-              items.map((inv) => (
-                <TableRow key={inv.id}>
-                  <TableCell className="font-mono text-xs">
-                    {inv.invoiceNo}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(inv.issuedAt).toLocaleString()}
-                  </TableCell>
-                  <TableCell>{inv.sale?.customerName || "Walk-in"}</TableCell>
-                  <TableCell className="capitalize">
-                    {inv.sale?.paymentMethod}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    ${inv.sale?.total ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => downloadPdf(inv.id, inv.invoiceNo)}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
+      <DataTable
+        columns={columns}
+        data={items}
+        isLoading={isLoading}
+        searchPlaceholder="Search by invoice #, customer..."
+        emptyMessage="No invoices yet."
+      />
     </div>
   );
 }

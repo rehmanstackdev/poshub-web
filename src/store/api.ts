@@ -14,6 +14,7 @@ import type {
   Role,
   Sale,
   SalesSummary,
+  Shop,
   TopProduct,
   User,
   UserStatus,
@@ -55,8 +56,49 @@ export const api = createApi({
     "Sale",
     "Invoice",
     "Report",
+    "Shop",
   ],
   endpoints: (build) => ({
+    // --- Shops (super_admin only) ---
+    getShops: build.query<Shop[], void>({
+      query: () => "/shops",
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((s) => ({ type: "Shop" as const, id: s.id })),
+              { type: "Shop", id: "LIST" },
+            ]
+          : [{ type: "Shop", id: "LIST" }],
+    }),
+    createShop: build.mutation<
+      Shop,
+      { name: string; address?: string; phone?: string; logoUrl?: string }
+    >({
+      query: (body) => ({ url: "/shops", method: "POST", body }),
+      invalidatesTags: [{ type: "Shop", id: "LIST" }],
+    }),
+    updateShop: build.mutation<
+      Shop,
+      {
+        id: string;
+        name?: string;
+        address?: string;
+        phone?: string;
+        logoUrl?: string;
+        isActive?: boolean;
+      }
+    >({
+      query: ({ id, ...body }) => ({ url: `/shops/${id}`, method: "PATCH", body }),
+      invalidatesTags: (_r, _e, arg) => [
+        { type: "Shop", id: arg.id },
+        { type: "Shop", id: "LIST" },
+      ],
+    }),
+    deleteShop: build.mutation<void, string>({
+      query: (id) => ({ url: `/shops/${id}`, method: "DELETE" }),
+      invalidatesTags: [{ type: "Shop", id: "LIST" }],
+    }),
+
     // --- Auth ---
     login: build.mutation<
       { accessToken: string; user: AuthUser },
@@ -71,6 +113,7 @@ export const api = createApi({
         email: raw.email,
         name: (raw as AuthUser).name ?? raw.email,
         role: raw.role,
+        shopId: raw.shopId ?? null,
       }),
     }),
 
@@ -119,7 +162,7 @@ export const api = createApi({
         { type: "User", id: "LIST" },
       ],
     }),
-    disableUser: build.mutation<User, string>({
+    deleteUser: build.mutation<void, string>({
       query: (id) => ({ url: `/users/${id}`, method: "DELETE" }),
       invalidatesTags: (_r, _e, id) => [
         { type: "User", id },
@@ -306,12 +349,16 @@ export const api = createApi({
 });
 
 export const {
+  useGetShopsQuery,
+  useCreateShopMutation,
+  useUpdateShopMutation,
+  useDeleteShopMutation,
   useLoginMutation,
   useMeQuery,
   useGetUsersQuery,
   useCreateUserMutation,
   useUpdateUserMutation,
-  useDisableUserMutation,
+  useDeleteUserMutation,
   useGetCategoriesQuery,
   useCreateCategoryMutation,
   useUpdateCategoryMutation,

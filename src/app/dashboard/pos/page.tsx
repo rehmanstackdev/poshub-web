@@ -198,7 +198,7 @@ export default function PosPage() {
                     key={p.id}
                     onClick={() => !out && addToCart(p)}
                     disabled={out}
-                    className="group rounded-lg border border-border bg-card/60 p-4 text-left transition hover:border-primary/60 hover:bg-card disabled:cursor-not-allowed disabled:opacity-50"
+                    className="group cursor-pointer rounded-lg border border-border bg-card/60 p-4 text-left transition hover:border-primary/60 hover:bg-card hover:ring-2 hover:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:ring-0"
                   >
                     <div className="flex items-start justify-between">
                       <div>
