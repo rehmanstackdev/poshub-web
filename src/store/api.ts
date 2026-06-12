@@ -41,7 +41,10 @@ const baseQueryWithAuth: BaseQueryFn<
 > = async (args, api, extraOptions) => {
   const result = await rawBaseQuery(args, api, extraOptions);
   if (result.error?.status === 401) {
-    api.dispatch(clearCredentials());
+    // Only clear credentials if the user was actually logged in —
+    // prevents redirect loop when unauthenticated requests get a 401
+    const token = (api.getState() as RootState).auth.token;
+    if (token) api.dispatch(clearCredentials());
   }
   return result;
 };
